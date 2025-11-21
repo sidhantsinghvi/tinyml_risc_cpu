@@ -1,0 +1,5 @@
+read_verilog ../rtl/*.v
+synth -top cpu_top
+stat
+write_json cpu.json
+write_verilog cpu_synth.v
