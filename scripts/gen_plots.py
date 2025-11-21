@@ -39,6 +39,13 @@ OPCODE_COLORS = {
     0xF: "#e377c2",
 }
 
+FEATURE_EVENTS = {
+    0x8: "MAC4",
+    0xD: "CONV3",
+    0xE: "SIG",
+    0xF: "ACC",
+}
+
 
 def parse_trace(path: Path):
     if not path.exists():
@@ -87,20 +94,41 @@ def build_waveform_svg(data):
         ("ALU Result", [entry["alu"] for entry in data], "#ff7f0e"),
         ("Accumulator", [entry["acc"] for entry in data], "#2ca02c"),
     ]
-    panel_height = 180
-    width = 900
-    margin = 40
+    panel_height = 220
+    width = 1100
+    margin = 60
     total_height = panel_height * len(series)
     layers = []
 
     for idx, (label, values, color) in enumerate(series):
         y_off = idx * panel_height
         pts, vmin, vmax = polyline_points(cycles, values, width, panel_height, margin, y_off)
+        grid_lines = []
+        for frac in [0.25, 0.5, 0.75]:
+            y = y_off + margin + (panel_height - 2 * margin) * frac
+            grid_lines.append(
+                f"<line x1=\"{margin}\" y1=\"{y:.2f}\" x2=\"{width - margin}\" y2=\"{y:.2f}\" stroke=\"#e5e5e5\" stroke-dasharray=\"4 4\"/>"
+            )
+
+        event_tags = []
+        for entry in data:
+            opcode = entry["opcode"]
+            if opcode in FEATURE_EVENTS:
+                x = margin + (entry["cycle"] - cycles[0]) * (width - 2 * margin) / max(1, cycles[-1] - cycles[0])
+                event_tags.append(
+                    f"<line x1=\"{x:.2f}\" y1=\"{y_off + margin}\" x2=\"{x:.2f}\" y2=\"{y_off + panel_height - margin}\" stroke=\"#bbbbbb\" stroke-dasharray=\"3 4\"/>"
+                )
+                event_tags.append(
+                    f"<text x=\"{x:.2f}\" y=\"{y_off + margin - 10}\" font-size=\"12\" text-anchor=\"middle\" fill=\"#666\">{FEATURE_EVENTS[opcode]}</text>"
+                )
+
         layers.append(
             f"<g>\n"
-            f"  <rect x=\"{margin}\" y=\"{y_off + margin}\" width=\"{width - 2 * margin}\" height=\"{panel_height - 2 * margin}\" fill=\"none\" stroke=\"#cccccc\" stroke-width=\"1\"/>\n"
-            f"  <polyline fill=\"none\" stroke=\"{color}\" stroke-width=\"2\" points=\"{' '.join(pts)}\"/>\n"
-            f"  <text x=\"{margin}\" y=\"{y_off + 20}\" font-size=\"16\" fill=\"#333\">{label} (range {vmin}..{vmax})</text>\n"
+            f"  <rect x=\"{margin}\" y=\"{y_off + margin}\" width=\"{width - 2 * margin}\" height=\"{panel_height - 2 * margin}\" fill=\"#fafafa\" stroke=\"#cccccc\" stroke-width=\"1\"/>\n"
+            f"  {''.join(grid_lines)}\n"
+            f"  {''.join(event_tags)}\n"
+            f"  <polyline fill=\"none\" stroke=\"{color}\" stroke-width=\"3\" points=\"{' '.join(pts)}\"/>\n"
+            f"  <text x=\"{margin}\" y=\"{y_off + 25}\" font-size=\"18\" fill=\"#333\">{label} (range {vmin}..{vmax})</text>\n"
             f"</g>"
         )
 
@@ -117,20 +145,26 @@ def build_waveform_svg(data):
 def build_accumulator_svg(data):
     cycles = [entry["cycle"] for entry in data]
     accs = [entry["acc"] for entry in data]
-    width = 900
-    height = 300
-    margin = 50
+    width = 1100
+    height = 360
+    margin = 70
     pts, vmin, vmax = polyline_points(cycles, accs, width, height, margin, 0)
     circles = []
-    for point in pts:
+    labels = []
+    for entry, point in zip(data, pts):
         x, y = point.split(",")
-        circles.append(f"<circle cx=\"{x}\" cy=\"{y}\" r=\"4\" fill=\"#2ca02c\"/>")
+        if entry["opcode"] == 0xF:
+            circles.append(f"<circle cx=\"{x}\" cy=\"{y}\" r=\"6\" fill=\"#2ca02c\" stroke=\"#ffffff\" stroke-width=\"2\"/>")
+            labels.append(f"<text x=\"{x}\" y=\"{float(y) - 12:.2f}\" font-size=\"12\" text-anchor=\"middle\" fill=\"#2e6b2e\">+={entry['rs1']}</text>")
+        else:
+            circles.append(f"<circle cx=\"{x}\" cy=\"{y}\" r=\"3\" fill=\"#8ad18a\"/>")
     svg = (
         f"<svg xmlns=\"http://www.w3.org/2000/svg\" width=\"{width}\" height=\"{height}\" viewBox=\"0 0 {width} {height}\">\n"
-        f"  <rect x=\"{margin}\" y=\"{margin}\" width=\"{width - 2 * margin}\" height=\"{height - 2 * margin}\" fill=\"none\" stroke=\"#cccccc\"/>\n"
-        f"  <polyline fill=\"none\" stroke=\"#2ca02c\" stroke-width=\"2\" points=\"{' '.join(pts)}\"/>\n"
+        f"  <rect x=\"{margin}\" y=\"{margin}\" width=\"{width - 2 * margin}\" height=\"{height - 2 * margin}\" fill=\"#fafafa\" stroke=\"#cccccc\"/>\n"
+        f"  <polyline fill=\"none\" stroke=\"#2ca02c\" stroke-width=\"4\" points=\"{' '.join(pts)}\"/>\n"
         f"  {''.join(circles)}\n"
-        f"  <text x=\"{margin}\" y=\"30\" font-size=\"18\">Accumulator Evolution (final {accs[-1]})</text>\n"
+        f"  {''.join(labels)}\n"
+        f"  <text x=\"{margin}\" y=\"45\" font-size=\"20\">Accumulator Evolution (final {accs[-1]})</text>\n"
         f"</svg>\n"
     )
     out_path = ASSETS / "accumulator.svg"
@@ -141,9 +175,9 @@ def build_accumulator_svg(data):
 def build_opcode_timeline_svg(data):
     cycles = [entry["cycle"] for entry in data]
     opcodes = [entry["opcode"] for entry in data]
-    width = 900
-    height = 220
-    margin = 40
+    width = 1100
+    height = 260
+    margin = 60
     x0 = cycles[0]
     span = max(1, cycles[-1] - x0)
     scale_x = (width - 2 * margin) / span
@@ -163,12 +197,32 @@ def build_opcode_timeline_svg(data):
             f"<text x=\"{x + block_width / 2:.2f}\" y=\"{margin + chart_height / 2:.2f}\" font-size=\"14\" text-anchor=\"middle\" fill=\"#111\">{OPCODE_NAMES.get(opcode, hex(opcode))}</text>"
         )
 
+    ticks = []
+    for entry in data:
+        x = margin + (entry["cycle"] - x0) * scale_x
+        ticks.append(f"<line x1=\"{x:.2f}\" y1=\"{margin + chart_height}\" x2=\"{x:.2f}\" y2=\"{margin + chart_height + 8}\" stroke=\"#999\"/>")
+        ticks.append(f"<text x=\"{x:.2f}\" y=\"{height - 5}\" font-size=\"10\" text-anchor=\"middle\">{entry['cycle']}</text>")
+
+    legend_elements = []
+    legend_x = margin
+    legend_y = 25
+    for opcode, color in OPCODE_COLORS.items():
+        legend_elements.append(
+            f"<rect x=\"{legend_x}\" y=\"{legend_y}\" width=\"22\" height=\"12\" fill=\"{color}\" opacity=\"0.6\" stroke=\"#444\" stroke-width=\"0.5\"/>"
+        )
+        legend_elements.append(
+            f"<text x=\"{legend_x + 28}\" y=\"{legend_y + 11}\" font-size=\"12\">{OPCODE_NAMES.get(opcode, hex(opcode))}</text>"
+        )
+        legend_x += 110
+
     svg = (
         f"<svg xmlns=\"http://www.w3.org/2000/svg\" width=\"{width}\" height=\"{height}\" viewBox=\"0 0 {width} {height}\">\n"
-        f"  <rect x=\"{margin}\" y=\"{margin}\" width=\"{width - 2 * margin}\" height=\"{chart_height}\" fill=\"none\" stroke=\"#cccccc\"/>\n"
+        f"  <rect x=\"{margin}\" y=\"{margin}\" width=\"{width - 2 * margin}\" height=\"{chart_height}\" fill=\"#fafafa\" stroke=\"#cccccc\"/>\n"
         f"  {''.join(blocks)}\n"
         f"  {''.join(annotations)}\n"
-        f"  <text x=\"{width / 2}\" y=\"{height - 10}\" font-size=\"16\" text-anchor=\"middle\">Opcode Timeline</text>\n"
+        f"  {''.join(ticks)}\n"
+        f"  {''.join(legend_elements)}\n"
+        f"  <text x=\"{width / 2}\" y=\"{margin - 18}\" font-size=\"20\" text-anchor=\"middle\">Opcode Timeline</text>\n"
         f"</svg>\n"
     )
     out_path = ASSETS / "opcode_timeline.svg"
