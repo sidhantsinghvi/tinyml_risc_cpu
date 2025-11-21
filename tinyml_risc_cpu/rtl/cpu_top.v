@@ -19,11 +19,14 @@ module cpu_top (
     wire [31:0] rs1_data;
     wire [31:0] rs2_data;
     wire [31:0] alu_operand_b;
+    wire [31:0] alu_result_raw;
     wire [31:0] alu_result;
     wire [31:0] imm_ext;
     wire [31:0] imm_low;
     wire [31:0] imm_high_merge;
     reg  [31:0] write_back_data;
+    reg  [31:0] acc;
+    wire        is_acc_opcode;
 
     pc pc_i (
         .clk    (clk),
@@ -66,6 +69,16 @@ module cpu_top (
         .parity_error (parity_error)
     );
 
+    assign is_acc_opcode = (opcode == 4'b1111);
+
+    always @(posedge clk) begin
+        if (rst) begin
+            acc <= 32'h0000_0000;
+        end else if (is_acc_opcode) begin
+            acc <= acc + rs1_data;
+        end
+    end
+
     assign imm_ext        = {{16{imm16[15]}}, imm16};
     assign imm_low        = {16'h0000, imm16};
     assign imm_high_merge = {imm16, rs1_data[15:0]};
@@ -76,8 +89,10 @@ module cpu_top (
         .a      (rs1_data),
         .b      (alu_operand_b),
         .opcode (alu_ctrl),
-        .result (alu_result)
+        .result (alu_result_raw)
     );
+
+    assign alu_result = is_acc_opcode ? acc : alu_result_raw;
 
     always @(*) begin
         case (writeback_sel)

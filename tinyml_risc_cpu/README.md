@@ -38,6 +38,28 @@ tinyml_risc_cpu/
 
 Expected MAC4 demo: R1 is loaded with `0x04030201`, R2 with `0x08070605`, so the MAC computes `1*5 + 2*6 + 3*7 + 4*8 = 70` and stores `70 (0x46)` in R3.
 
+## Plotting the Run
+The testbench emits a `TRACE` line every cycle, making it easy to turn the textual log into visuals:
+
+1. Capture the simulation output:
+   ```bash
+   cd tinyml_risc_cpu
+   iverilog -g2012 -o cpu_tb.out rtl/*.v tb/cpu_tb.v
+   vvp cpu_tb.out | tee assets/cpu.log
+   ```
+2. Convert the trace into SVG plots (pure Python, no extra libraries needed):
+   ```bash
+   python3 scripts/gen_plots.py
+   ```
+
+The script drops three files into `assets/`, ready for documentation:
+
+![Simulation waveforms for PC/ALU/ACC](assets/sim_waveforms.svg)
+
+![Accumulator evolution](assets/accumulator.svg)
+
+![Opcode timeline](assets/opcode_timeline.svg)
+
 ## Synthesis
 The provided Yosys script targets a generic netlist:
 ```bash

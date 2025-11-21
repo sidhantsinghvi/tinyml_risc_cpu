@@ -33,6 +33,18 @@ module control_unit (
                 reg_write     = 1'b1;
                 writeback_sel = WB_IMM_HIGH;
             end
+            4'b1101: begin // 3x3 convolution helper
+                reg_write     = 1'b1;
+                writeback_sel = WB_ALU;
+            end
+            4'b1110: begin // piecewise sigmoid
+                reg_write     = 1'b1;
+                writeback_sel = WB_ALU;
+            end
+            4'b1111: begin // accumulator uses internal register
+                reg_write     = 1'b0;
+                writeback_sel = WB_ALU;
+            end
             default: begin
                 reg_write     = 1'b0;
                 writeback_sel = WB_ALU;

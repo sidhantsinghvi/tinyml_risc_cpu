@@ -49,14 +49,31 @@ module cpu_tb;
             $display("---- Cycle %0d ----", cycle_count);
             $display("PC=%0d (0x%08h) INSTR=0x%08h OPCODE=0x%1h", pc_value, pc_value, dut.instruction, dut.opcode);
             $display("ALU=%0d (0x%08h) PARITY_ERR=%b", $signed(dut.alu_result), dut.alu_result, parity_error);
+            $display("Operands: RS1=R%0d %0d (0x%08h)  RS2=R%0d %0d (0x%08h)", dut.rs1, $signed(dut.rs1_data), dut.rs1_data, dut.rs2, $signed(dut.rs2_data), dut.rs2_data);
+            $display("Accumulator state: curr=%0d next_if_acc=%0d", $signed(dut.acc), $signed(dut.acc + (dut.opcode == 4'b1111 ? dut.rs1_data : 32'd0)));
+            $display("TRACE cycle=%0d pc=%0d opcode=%0h alu=%0d acc=%0d rs1=%0d rs2=%0d", cycle_count, pc_value, dut.opcode, $signed(dut.alu_result), $signed(dut.acc), $signed(dut.rs1_data), $signed(dut.rs2_data));
             display_registers();
 
             if (dut.opcode == 4'b1000) begin
                 $display("   -> MAC4 executing: result=%0d (0x%08h)", $signed(dut.alu_result), dut.alu_result);
             end
+            if (dut.opcode == 4'b1101) begin
+                $display("   -> CONV3 r%0d=%0d r%0d=%0d result=%0d", dut.rs1, $signed(dut.rs1_data), dut.rs2, $signed(dut.rs2_data), $signed(dut.alu_result));
+            end
+            if (dut.opcode == 4'b1110) begin
+                $display("   -> SIGMOID input=%0d output=%0d (0x%02h)", $signed(dut.rs1_data), $signed(dut.alu_result[7:0]), dut.alu_result[7:0]);
+            end
+            if (dut.opcode == 4'b1111) begin
+                $display("   -> ACC input=R%0d=%0d accum_before=%0d accum_after=%0d", dut.rs1, $signed(dut.rs1_data), $signed(dut.acc), $signed(dut.acc + dut.rs1_data));
+            end
 
-            if (pc_value >= 32'd32) begin
-                $display("Program complete. Final MAC4 result stored in R3=%0d (0x%08h)", $signed(dut.regfile_i.regs[3]), dut.regfile_i.regs[3]);
+            if (pc_value >= 32'd80) begin
+                $display("Program complete.");
+                $display("   MAC4 result  : R3=%0d (0x%08h)", $signed(dut.regfile_i.regs[3]), dut.regfile_i.regs[3]);
+                $display("   CONV3 result : R6=%0d (0x%08h)", $signed(dut.regfile_i.regs[6]), dut.regfile_i.regs[6]);
+                $display("   SIGMOID (+)  : R8=%0d (0x%08h)", $signed(dut.regfile_i.regs[8][7:0]), dut.regfile_i.regs[8]);
+                $display("   SIGMOID (-)  : R10=%0d (0x%08h)", $signed(dut.regfile_i.regs[10][7:0]), dut.regfile_i.regs[10]);
+                $display("   ACC final    : %0d (0x%08h)", $signed(dut.acc), dut.acc);
                 $finish;
             end
         end
